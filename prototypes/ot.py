@@ -8,6 +8,23 @@
     gain understanding on operational transformation with a focus on it's
     applicability on real-time collaborative text editing.
 
+    Researching OT I've found that there are two main approaches in
+    representing operations. The first one is to represent operations as
+    actions such as ``Insert(position, string)`` and send those around, the
+    second is two represent operations as patches ``[0-position,string,-end]``.
+
+    At the moment I'm going with the first approach as this seems to be the one
+    favored by [1]_ and performing IT is fairly straightforward. However there
+    are several downsides. First of all overlapping concurrent delete and
+    insert operations cannot be inclusion transformed without creating two
+    operations, representing a single operation executed by the user. This
+    requires some mapping between user and OT operations. The second issue is
+    that patches allow for natural representation of more complex user
+    operations such as substitutions, representing them as actions is trivial
+    as well but it would make undo more complicated and I worry about possible
+    side-effects with concurrency if such complex operations have to be
+    splitted.
+
     .. [1]: David Sun and Chengzheng Sun. 2009. Context-Based Operational
             Transformation in Distributed Collaborative Editing Systems. IEEE
             Trans. Parallel Distrib. Syst. 20, 10 (October 2009), 1454-1470.
