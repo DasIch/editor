@@ -1,4 +1,19 @@
 # coding: utf-8
+"""
+    rope
+    ~~~~
+
+    This is a prototype for an implementation of ropes. Ropes are a data
+    structure designed to represent strings so that operations such as
+    concatenation and insertion are cheap.
+
+    The goal of this prototype is to gain understanding about ropes as such,
+    there usefulness when used for text editing and whether they can be
+    extended to allow representation of (almost) arbitrarily large strings.
+
+    :copyright: 2012 by Daniel Neuhäuser
+    :license: BSD
+"""
 from itertools import chain, izip
 
 

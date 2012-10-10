@@ -1,4 +1,21 @@
 # coding: utf-8
+"""
+    ot
+    ~~
+
+    This is a prototype for an implementation of context-based operational
+    transformation as described in [1]_. The goal behind this prototype is to
+    gain understanding on operational transformation with a focus on it's
+    applicability on real-time collaborative text editing.
+
+    .. [1]: David Sun and Chengzheng Sun. 2009. Context-Based Operational
+            Transformation in Distributed Collaborative Editing Systems. IEEE
+            Trans. Parallel Distrib. Syst. 20, 10 (October 2009), 1454-1470.
+            DOI=10.1109/TPDS.2008.240 http://dx.doi.org/10.1109/TPDS.2008.240
+
+    :copyright: 2012 by Daniel Neuhäuser
+    :license: BSD
+"""
 
 
 class Operation(object):
