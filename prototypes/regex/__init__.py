@@ -5,7 +5,10 @@
 
     This is a prototype for an implementation of regular expressions. The goal
     of this prototype is to develop a completely transparent implementation,
-    that can be better reasoned about and used in a parser.
+    that can be better reasoned about and used in a parser. This is not meant
+    to be an implementation that will see real-world usage, in fact the
+    performance on most - if not all - python implementations will make that
+    prohibitive.
 
     Note that as of now "regular expressions" actually means *regular*, so
     non-greedy repetitions (``*?``, ``+?``), positive/negative
