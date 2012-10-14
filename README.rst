@@ -3,7 +3,7 @@ Editor
 
 Editor is a project that aims to explore and implement cutting edge text
 editing technologies, eventually creating a text editor that - in the opinion
-of it's authors - surpasses other, currently existing text editors and IDEs.
+of its authors - surpasses other, currently existing text editors and IDEs.
 
 The goal of this project is to create a text editing experience that is close
 to that of editors such as vim or emacs when it comes to text manipulation,
