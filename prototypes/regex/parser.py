@@ -1,23 +1,25 @@
 # coding: utf-8
 """
-    regex
-    ~~~~~
-
-    This is a prototype for an implementation of regular expressions. The goal
-    of this prototype is to develop a completely transparent implementation,
-    that can be better reasoned about and used in parser.
+    regex.parser
+    ~~~~~~~~~~~~
 
     :copyright: 2012 by Daniel Neuhäuser
     :license: BSD
 """
 import sys
-import unittest
 from itertools import imap
-from functools import partial
 from contextlib import contextmanager
 from collections import deque
 
-from docopt import docopt
+from regex.ast import (
+    Epsilon, Any, Character, Concatenation, Union, Repetition, Group, Either,
+    Neither, Range
+)
+
+
+DEFAULT_ALPHABET = frozenset(
+    Character(unichr(i)) for i in xrange(sys.maxunicode)
+)
 
 
 class RegexException(Exception):
@@ -31,10 +33,10 @@ class ParserError(RegexException):
         self.annotation = annotation
 
     def __unicode__(self):
-        return u"%s\n%s" % (self.reason, sef.annotation)
+        return u"%s\n%s" % (self.reason, self.annotation)
 
     def __str__(self):
-        return "%s\n%s" % (self.reason, self.annotation)
+        return unicode(self).encode(sys.stdout.encoding or "ascii", "replace")
 
 
 class Language(object):
@@ -44,7 +46,9 @@ class Language(object):
                  group_begin=u"(", group_end=u")",
                  either_begin=u"[", either_end=u"]",
                  neither_indicator=u"^",
-                 zero_or_more=u"*", one_or_more=u"+"
+                 zero_or_more=u"*", one_or_more=u"+",
+                 range=u"-",
+                 any=u"."
                  ):
         self.escape = escape
         self.union = union
@@ -55,6 +59,8 @@ class Language(object):
         self.zero_or_more = zero_or_more
         self.one_or_more = one_or_more
         self.neither_indicator = neither_indicator
+        self.range = range
+        self.any = any
 
     def __eq__(self, other):
         if self is other:
@@ -69,7 +75,9 @@ class Language(object):
                 self.either_end == other.either_end and
                 self.zero_or_more == other.zero_or_more and
                 self.one_or_more == other.one_or_more and
-                self.neither_indicator == other.neither_indicator
+                self.neither_indicator == other.neither_indicator and
+                self.range == other.range and
+                self.any == other.any
             )
         return NotImplemented
 
@@ -83,7 +91,9 @@ class Language(object):
             self.union,
             self.group_begin, self.group_end,
             self.either_begin, self.either_end,
-            self.zero_or_more, self.one_or_more
+            self.zero_or_more, self.one_or_more,
+            self.range,
+            self.any
         ])
 
     @property
@@ -102,10 +112,6 @@ class Language(object):
     def either_characters(self):
         return [self.either_begin, self.either_end]
 
-    @property
-    def repetition_characters(self):
-        return [self.zero_or_more, self.one_or_more]
-
     def escape_character(self, character):
         if character in self.special_characters:
             return self.escape + character
@@ -117,6 +123,8 @@ class Language(object):
     def to_unicode(self, regex):
         if isinstance(regex, Epsilon):
             return u""
+        elif isinstance(regex, Any):
+            return self.language.any
         elif isinstance(regex, Character):
             return self.escape(regex.raw)
         elif isinstance(regex, Concatenation):
@@ -130,7 +138,7 @@ class Language(object):
         elif isinstance(regex, Repetition):
             return u"%s%s" % (
                 self.to_unicode(regex.repeated),
-                self.repetition_characters[regex.require_once]
+                self.zero_or_more
             )
         elif isinstance(regex, Group):
             return u"%s%s%s" % (
@@ -150,6 +158,12 @@ class Language(object):
                 self.neither_indicator,
                 u"".join(imap(self.to_unicode, regex.characters)),
                 self.either_end
+            )
+        elif isinstance(regex, Range):
+            return u"%s%s%s" % (
+                self.to_unicode(regex.start),
+                self.range,
+                self.to_unicode(regex.end)
             )
         raise NotImplementedError(regex)
 
@@ -210,14 +224,14 @@ class Input(object):
 
     def annotated(self, position=None):
         position = self.position if position is None else position
-        annotation = [u" "] * max(len(self.string), position + 1)
+        annotation = [u" "] * (position + 1)
         annotation[position] = u"^"
         return u"%s\n%s" % (self.string, u"".join(annotation))
 
     def annotated_range(self, start=None, end=None):
         start = self.position if start is None else start
         end = self.position if end is None else end
-        annotation = [u" "] * max(len(self.string), end + 1)
+        annotation = [u" "] * (end + 1)
         annotation[start] = annotation[end] = u"^"
         for position in xrange(start + 1, end):
             annotation[position] = u"-"
@@ -225,8 +239,9 @@ class Input(object):
 
 
 class Parser(object):
-    def __init__(self, language):
+    def __init__(self, language, alphabet=DEFAULT_ALPHABET):
         self.language = language
+        self.alphabet = alphabet
 
     def expect(self, input, expected):
         assert len(expected) == 1
@@ -325,14 +340,15 @@ class Parser(object):
                         input.annotated()
                     )
                 require_once = character == self.language.one_or_more
+                if require_once:
+                    result = Concatenation(result, result)
                 if isinstance(result, Concatenation):
                     result = Concatenation(
-                        self.language,
                         result.left,
-                        Repetition(self.language, result.right, require_once)
+                        Repetition(result.right)
                     )
                 else:
-                    result = Repetition(result, require_once)
+                    result = Repetition(result)
             elif character == self.language.union:
                 input.consume()
                 result = Union(
@@ -345,6 +361,9 @@ class Parser(object):
                 result = self.concat_or_return(
                     result, self.parse_either_or_neither(input)
                 )
+            elif character == self.language.any:
+                input.consume()
+                result = self.concat_or_return(result, Any(self.alphabet))
             elif character in self.language.end_characters:
                 break
             else:
@@ -366,16 +385,21 @@ class Parser(object):
 
     def parse_either_or_neither(self, input):
         with self.expect_surrounding(input, *self.language.either_characters):
-            is_neither = input.lookahead() == self.language.neither_indicator
-            result_cls = Either
-            if is_neither:
+            if input.lookahead() == self.language.neither_indicator:
                 input.consume()
-                result_cls = Neither
-            return result_cls(
-                self.parse_characters(input, self.language.either_end)
+                return Neither(
+                    self.parse_either_or_neither_body(
+                        input, self.language.either_end
+                    ),
+                    self.alphabet
+                )
+            return Either(
+                self.parse_either_or_neither_body(
+                    input, self.language.either_end
+                )
             )
 
-    def parse_characters(self, input, until):
+    def parse_either_or_neither_body(self, input, until):
         result = []
         while True:
             try:
@@ -387,320 +411,34 @@ class Parser(object):
             input.consume()
             if character == self.language.escape:
                 character = input.next()
-            result.append(Character(character))
-        return result
+            elif character == self.language.range:
+                if not result:
+                    raise ParserError(
+                        u"range is missing start",
+                        input.annotated(input.position - 1)
+                    )
+                result.append(
+                    Range(
+                        result.pop(),
+                        self.parse_character(input),
+                        self.alphabet
+                    )
+                )
+            else:
+                result.append(Character(character))
+        return frozenset(result)
+
+    def parse_character(self, input):
+        character = input.next(fail_unexpected=True)
+        if character == self.language.escape:
+            character = input.next(fail_unexpected=True)
+        elif character in self.language.special_characters:
+            raise ParserError(
+                "expected character, found instruction: %s" % character,
+                input.annotated()
+            )
+        return Character(character)
 
 
 def parse(string):
-    parser = Parser(DEFAULT_LANGUAGE)
-    return parser.parse(string)
-
-
-class Regex(object):
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return True
-        return NotImplemented
-
-    def __ne__(self, other):
-        return not self == other
-
-
-class Epsilon(Regex):
-    def __repr__(self):
-        return "%s()" % (self.__class__.__name__)
-
-
-class Character(Regex):
-    def __new__(cls, raw):
-        if raw == u"":
-            return Epsilon()
-        return Regex.__new__(cls, raw)
-
-    def __init__(self, raw):
-        self.raw = raw
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.raw == other.raw
-        return NotImplemented
-
-    def __repr__(self):
-        return "%s(%r)" % (
-            self.__class__.__name__, self.raw
-        )
-
-
-class Operator(Regex):
-    def __new__(cls, left, right):
-        if isinstance(left, Epsilon):
-            return right
-        elif isinstance(right, Epsilon):
-            return left
-        return Regex.__new__(cls, left, right)
-
-    def __init__(self, left, right):
-        self.left = left
-        self.right = right
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return (
-                self.left == other.left and
-                self.right == other.right
-            )
-        return NotImplemented
-
-    def __repr__(self):
-        return "%s(%r, %r)" % (
-            self.__class__.__name__,
-            self.left,
-            self.right
-        )
-
-
-class Concatenation(Operator):
-    pass
-
-
-class Union(Operator):
-    pass
-
-
-class Repetition(Regex):
-    def __init__(self, repeated, require_once):
-        self.repeated = repeated
-        self.require_once = require_once
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return (
-                self.repeated == other.repeated and
-                self.require_once == other.require_once
-            )
-        return NotImplemented
-
-    def __repr__(self):
-        return "%s(%r, %r)" % (
-            self.__class__.__name__,
-            self.repeated,
-            self.require_once
-        )
-
-
-class Group(Regex):
-    def __init__(self, grouped):
-        self.grouped = grouped
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.grouped == other.grouped
-        return NotImplemented
-
-    def __repr__(self):
-        return "%s(%r)" % (
-            self.__class__.__name__,
-            self.grouped
-        )
-
-
-class Either(Regex):
-    def __init__(self, characters):
-        self.characters = characters
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.characters == other.characters
-        return NotImplemented
-
-    def __repr__(self):
-        return "%s(%r)" % (
-            self.__class__.__name__,
-            self.characters
-        )
-
-
-class Neither(Regex):
-    def __init__(self, characters):
-        self.characters = characters
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.characters == other.characters
-        return NotImplemented
-
-    def __repr__(self):
-        return "%s(%r)" % (
-            self.__class__.__name__,
-            self.characters
-        )
-
-
-class TestParse(unittest.TestCase):
-    def test_epsilon(self):
-        self.assertEqual(parse(u""), Epsilon())
-
-    def test_character(self):
-        self.assertEqual(parse(u"a"), Character(u"a"))
-
-    def test_concatenation(self):
-        self.assertEqual(
-            parse(u"ab"),
-            Concatenation(
-                Character(u"a"),
-                Character(u"b")
-            )
-        )
-
-    def test_union(self):
-        self.assertEqual(
-            parse(u"a|b"),
-            Union(Character(u"a"), Character(u"b"))
-        )
-
-    def test_zero_or_more(self):
-        self.assertEqual(
-            parse(u"a*"),
-            Repetition(Character(u"a"), require_once=False)
-        )
-
-    def test_zero_or_more_missing_repeatable(self):
-        with self.assertRaises(ParserError) as context:
-            parse(u"*")
-        exception = context.exception
-        self.assertEqual(
-            exception.reason,
-            u"* is not preceded by a repeatable expression"
-        )
-        self.assertEqual(exception.annotation, (
-            u"*\n"
-            u"^"
-        ))
-
-    def test_one_or_more(self):
-        self.assertEqual(
-            parse(u"a+"),
-            Repetition(Character(u"a"), require_once=True)
-        )
-
-    def test_one_or_more_missing_repeatable(self):
-        with self.assertRaises(ParserError) as context:
-            parse(u"+")
-        exception = context.exception
-        self.assertEqual(
-            exception.reason,
-            u"+ is not preceded by a repeatable expression",
-        )
-        self.assertEqual(
-            exception.annotation,
-            (
-                u"+\n"
-                u"^"
-            )
-        )
-
-    def test_group(self):
-        self.assertEqual(
-            parse(u"(a)"),
-            Group(Character(u"a"))
-        )
-
-    def test_group_missing_begin(self):
-        with self.assertRaises(ParserError) as context:
-            parse(u"a)")
-        exception = context.exception
-        self.assertEqual(
-            exception.reason,
-            u"found unmatched )"
-        )
-        self.assertEqual(
-            exception.annotation,
-            (
-                u"a)\n"
-                u" ^"
-            )
-        )
-
-    def test_group_missing_end(self):
-        with self.assertRaises(ParserError) as context:
-            parse(u"(a")
-        exception = context.exception
-        self.assertEqual(
-            exception.reason,
-            u"unexpected end of string, expected ) corresponding to ("
-        )
-        self.assertEqual(
-            exception.annotation,
-            (
-                u"(a\n"
-                u"^-^"
-            )
-        )
-
-    def test_either(self):
-        self.assertEqual(
-            parse(u"[ab]"),
-            Either([
-                Character(u"a"),
-                Character(u"b")
-            ])
-        )
-
-    def test_either_missing_begin(self):
-        with self.assertRaises(ParserError) as context:
-            parse(u"ab]")
-        exception = context.exception
-        self.assertEqual(
-            exception.reason,
-            u"found unmatched ]"
-        )
-        self.assertEqual(
-            exception.annotation,
-            (
-                u"ab]\n"
-                u"  ^"
-            )
-        )
-
-    def test_either_missing_end(self):
-        with self.assertRaises(ParserError) as context:
-            parse(u"[ab")
-        exception = context.exception
-        self.assertEqual(
-            exception.reason,
-            u"unexpected end of string, expected ] corresponding to ["
-        )
-        self.assertEqual(
-            exception.annotation,
-            (
-                u"[ab\n"
-                u"^--^"
-            )
-        )
-
-    def test_neither(self):
-        self.assertEqual(
-            parse(u"[^ab]"),
-            Neither([
-                Character(u"a"),
-                Character(u"b")
-            ])
-        )
-
-
-def main(argv=sys.argv):
-    """
-    Usage:
-      regex test [<args>...]
-      regex -h | --help
-
-    Options:
-      -h --help  Show this.
-    """
-    arguments = docopt(main.__doc__, argv[1:], help=True)
-    if arguments["test"]:
-        unittest.main(argv=argv[0:1] + arguments["<args>"], buffer=True)
-
-
-if __name__ == "__main__":
-    main()
+    return Parser(DEFAULT_LANGUAGE, DEFAULT_ALPHABET).parse(string)
