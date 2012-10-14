@@ -31,7 +31,7 @@
             DOI=10.1109/TPDS.2008.240 http://dx.doi.org/10.1109/TPDS.2008.240
 
     :copyright: 2012 by Daniel Neuhäuser
-    :license: BSD
+    :license: BSD, see LICENSE.rst
 """
 
 

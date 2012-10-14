@@ -4,7 +4,7 @@
     ~~~~~~~~~~~
 
     :copyright: 2012 by Daniel Neuhäuser
-    :license: BSD
+    :license: BSD, see LICENSE.rst
 """
 from unittest import TestCase
 

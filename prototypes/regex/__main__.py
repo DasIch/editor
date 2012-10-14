@@ -1,4 +1,11 @@
 # coding: utf-8
+"""
+    regex
+    ~~~~~
+
+    :copyright: 2012 by Daniel Neuhäuser
+    :license: BSD, see LICENSE.rst
+"""
 import sys
 import unittest
 

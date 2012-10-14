@@ -12,7 +12,7 @@
     extended to allow representation of (almost) arbitrarily large strings.
 
     :copyright: 2012 by Daniel Neuhäuser
-    :license: BSD
+    :license: BSD, see LICENSE.rst
 """
 from itertools import chain, izip
 
