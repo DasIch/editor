@@ -39,6 +39,33 @@ class MatcherBase(object):
             yield find
             find = self.find(string, offset + find.span.end)
 
+    def subn(self, string, substitution):
+        if isinstance(substitution, unicode):
+            sub = lambda match: substitution
+        else:
+            sub = substitution
+        result = []
+        n = 0
+        match = self.find(string)
+        if match:
+            n += 1
+            result.append(string[:match.span.start])
+            result.append(sub(match))
+            string = string[match.span.end:]
+            while string:
+                match = self.find(string)
+                if match is None or len(match.match) == 0:
+                    break
+                n += 1
+                result.append(string[:match.span.start])
+                result.append(sub(match))
+                string = string[match.span.end:]
+        result.append(string)
+        return u"".join(result), n
+
+    def sub(self, string, substitution):
+        return self.subn(string, substitution)[0]
+
 
 class Find(object):
     def __init__(self, string, span):

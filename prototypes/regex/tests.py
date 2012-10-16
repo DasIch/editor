@@ -277,6 +277,12 @@ class RegexTestWrapper(object):
             for find, span in izip(matcher.find_all(string), spans):
                 assert find == Find(string, span), find
 
+    def assertSub(self, string, sub, expected_result):
+        for matcher in self.matchers:
+            result = matcher.subn(string, sub)
+            assert result == expected_result, result
+            assert matcher.sub(string, sub) == expected_result[0]
+
 
 class TestMatcher(TestCase):
     compilers = ["to_nfa", "to_dfa", "to_dfa_table"]
@@ -295,6 +301,8 @@ class TestMatcher(TestCase):
                 (u"a", Span(1, 1))
             ])
 
+            regex.assertSub(u"", u"a", (u"a", 1))
+
     def test_any(self):
         with self.regex(u".") as regex:
             regex.assertMatches(u"a", 1)
@@ -305,6 +313,9 @@ class TestMatcher(TestCase):
                 Span(0, 1),
                 Span(1, 2)
             ])
+
+            regex.assertSub(u"a", u"b", (u"b", 1))
+            regex.assertSub(u"aa", u"b", (u"bb", 2))
 
     def test_character(self):
         with self.regex(u"a") as regex:
@@ -325,6 +336,11 @@ class TestMatcher(TestCase):
                 Span(2, 3)
             ])
 
+            regex.assertSub(u"a", u"b", (u"b", 1))
+            regex.assertSub(u"ab", u"b", (u"bb", 1))
+            regex.assertSub(u"aa", u"b", (u"bb", 2))
+            regex.assertSub(u"bab", u"b", (u"bbb", 1))
+
     def test_concatenation(self):
         with self.regex(u"ab") as regex:
             regex.assertMatches(u"ab", 2)
@@ -343,6 +359,10 @@ class TestMatcher(TestCase):
                 Span(0, 2),
                 Span(3, 5)
             ])
+
+            regex.assertSub(u"ab", u"c", (u"c", 1))
+            regex.assertSub(u"abab", u"c", (u"cc", 2))
+            regex.assertSub(u"dabdabd", u"c", (u"dcdcd", 2))
 
     def test_union(self):
         with self.regex(u"a|b") as regex:
@@ -365,6 +385,11 @@ class TestMatcher(TestCase):
                     Span(2, 3)
                 ])
 
+            regex.assertSub(u"a", u"c", (u"c", 1))
+            regex.assertSub(u"b", u"c", (u"c", 1))
+            regex.assertSub(u"ab", u"c", (u"cc", 2))
+            regex.assertSub(u"dadbd", u"c", (u"dcdcd", 2))
+
     def test_zero_or_more(self):
         with self.regex(u"a*") as regex:
             regex.assertAllMatches([(u"", 0), (u"a", 1), (u"aa", 2)])
@@ -382,6 +407,10 @@ class TestMatcher(TestCase):
                 Span(0, 2),
                 Span(3, 5)
             ])
+
+            regex.assertSub(u"", u"b", (u"b", 1))
+            regex.assertSub(u"cac", u"b", (u"cbc", 1))
+            regex.assertSub(u"caac", u"b", (u"cbc", 1))
 
     def test_one_or_more(self):
         with self.regex(u"a+") as regex:
@@ -401,6 +430,9 @@ class TestMatcher(TestCase):
                 Span(3, 5)
             ])
 
+            regex.assertSub(u"cac", u"b", (u"cbc", 1))
+            regex.assertSub(u"caac", u"b", (u"cbc", 1))
+
     def test_group(self):
         with self.regex(u"(ab)") as ab:
             for string in [u"ab", u"abab", u"ababab"]:
@@ -419,6 +451,9 @@ class TestMatcher(TestCase):
                 Span(0, 2),
                 Span(3, 5)
             ])
+
+            ab.assertSub(u"dabd", u"c", (u"dcd", 1))
+            ab.assertSub(u"dababd", u"c", (u"dccd", 2))
 
         with self.regex(u"(ab)+") as abp:
             abp.assertAllMatches([
@@ -441,6 +476,9 @@ class TestMatcher(TestCase):
                 Span(5, 9)
             ])
 
+            abp.assertSub(u"dabd", u"c", (u"dcd", 1))
+            abp.assertSub(u"dababd", u"c", (u"dcd", 1))
+
     def test_either(self):
         with self.regex(u"[ab]") as regex:
             for string in [u"a", u"b", u"aa", u"bb", u"ab", u"ba"]:
@@ -462,6 +500,10 @@ class TestMatcher(TestCase):
                     Span(2, 3)
                 ])
 
+            regex.assertSub(u"a", u"c", (u"c", 1))
+            regex.assertSub(u"b", u"c", (u"c", 1))
+            regex.assertSub(u"dadbd", u"c", (u"dcdcd", 2))
+
     def test_neither(self):
         with self.regex(u"[^ab]") as regex:
             regex.assertMatches(u"c", 1)
@@ -479,6 +521,9 @@ class TestMatcher(TestCase):
                     Span(2, 3)
                 ])
 
+            regex.assertSub(u"bcb", u"a", (u"bab", 1))
+            regex.assertSub(u"bcbcb", u"a", (u"babab", 2))
+
     def test_range(self):
         with self.regex(u"[a-c]") as regex:
             for string in [u"a", u"aa", u"b", u"bb", u"c", u"cc"]:
@@ -494,3 +539,9 @@ class TestMatcher(TestCase):
                     Span(0, 1),
                     Span(2, 3)
                 ])
+
+            regex.assertSub(u"faf", u"e", (u"fef", 1))
+            regex.assertSub(u"fbf", u"e", (u"fef", 1))
+            regex.assertSub(u"fcf", u"e", (u"fef", 1))
+            regex.assertSub(u"fafbf", u"e", (u"fefef", 2))
+            regex.assertSub(u"fafbfcf", u"e", (u"fefefef", 3))
