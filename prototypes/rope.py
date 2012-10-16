@@ -87,7 +87,7 @@ class Concatenation(Rope):
         self.right = right
 
     def __getitem__(self, index):
-        assert index > 0
+        assert index >= 0
         if isinstance(index, int):
             if len(self) > index:
                 raise ValueError()
@@ -121,6 +121,8 @@ class Concatenation(Rope):
 
 class Repetition(Rope):
     def __new__(cls, times, obj):
+        if not obj:
+            return obj
         if times <= 0:
             return rope(u"")
         elif times == 1:
@@ -144,24 +146,18 @@ class Repetition(Rope):
                 self[index] for index in index.indices(len(self))
             )
         elif isinstance(index, int):
-            if index >= len(self.rope):
-                for _ in xrange(self.times):
-                    if index < len(self.rope):
-                        break
-                    index -= len(self.rope)
-                else:
-                    raise IndexError()
-            return self.rope[index]
+            assert index >= 0
+            return self.rope[index % len(self.rope)]
         raise TypeError()
 
     def __len__(self):
         return self.times * len(self.rope)
 
     def __iter__(self):
-        return chain.from_iterable([iter(self.rope)] * self.times)
+        return chain.from_iterable(iter(self.rope) for _ in xrange(self.times))
 
     def __reversed__(self):
-        return chain.from_iterable([reversed(self.rope)] * self.times)
+        return chain.from_iterable(reversed(self.rope) for _ in xrange(self.times))
 
     def __unicode__(self):
         return self.times * unicode(self.rope)
@@ -222,6 +218,42 @@ class TestString(unittest.TestCase):
     def test_nonzero(self):
         self.assertFalse(rope())
         self.assertTrue(rope(u"abc"))
+
+
+class TestRepetition(unittest.TestCase):
+    def test_new_optimization(self):
+        empty = rope()
+        self.assertIs(empty * 2, empty)
+
+        self.assertIsInstance(rope(u"abc") * 0, String)
+        self.assertEqual(rope(u"abc") * 0, rope())
+
+        self.assertIsInstance(rope(u"abc") * 1, String)
+        self.assertEqual(rope(u"abc") * 1, rope(u"abc"))
+
+    def test_getitem(self):
+        string = u"abc" * 2
+        rstring = rope(u"abc") * 2
+        for i, character in enumerate(string):
+            self.assertEqual(rstring[i], character)
+
+    def test_len(self):
+        self.assertEqual(len(rope(u"abc") * 2), 6)
+
+    def test_iter(self):
+        self.assertEqual(list(iter(rope(u"abc") * 2)), list(u"abc" * 2))
+
+    def test_reversed(self):
+        self.assertEqual(
+            list(reversed(rope(u"abc") * 2)),
+            list(reversed(u"abc" * 2))
+        )
+
+    def test_unicode(self):
+        self.assertEqual(unicode(rope(u"abc") * 2), u"abc" * 2)
+
+    def test_nonzero(self):
+        self.assertTrue(rope(u"abc") * 2)
 
 
 def main(argv=sys.argv):
