@@ -22,7 +22,7 @@ from docopt import docopt
 
 
 def rope(obj=u"", _strict=False):
-    if _strict and (not hasattr(obj, "__rope__") or isinstance(obj, basestring)):
+    if _strict and not (hasattr(obj, "__rope__") or isinstance(obj, basestring)):
         raise TypeError()
     if hasattr(obj, "__rope__"):
         return obj.__rope__()
@@ -61,9 +61,13 @@ class Rope(object):
     __hash__ = NotImplemented
 
     def join(self, iterable):
-        result = u""
-        for item in iterable:
-            result += self + rope(item, _strict=True)
+        items = (rope(item, _strict=True) for item in iterable)
+        try:
+            result = items.next()
+        except StopIteration:
+            return u""
+        for item in items:
+            result += self + item
         return result
 
     def inserted(self, position, other):
@@ -199,6 +203,9 @@ class String(Rope):
 class TestRope(unittest.TestCase):
     def test_init(self):
         self.assertIsInstance(rope(), String)
+
+    def test_join(self):
+        self.assertEqual(unicode(rope(u",").join(u"abc")), u"a,b,c")
 
 
 class TestString(unittest.TestCase):
