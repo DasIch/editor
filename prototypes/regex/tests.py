@@ -18,6 +18,7 @@ from regex.ast import (
     Neither, Range, Any
 )
 from regex.matcher import Find, Span
+from regex.tokenizer import Tokenizer, Token, TokenizerError
 
 
 class TestParser(TestCase):
@@ -551,3 +552,35 @@ class TestMatcher(TestCase):
             regex.assertSub(u"fcf", u"e", (u"fef", 1))
             regex.assertSub(u"fafbf", u"e", (u"fefef", 2))
             regex.assertSub(u"fafbfcf", u"e", (u"fefefef", 3))
+
+
+class TestTokenizer(TestCase):
+    def runTest(self):
+        class A(Token):
+            pass
+        class B(Token):
+            pass
+        class AB(Token):
+            pass
+
+        tokenizer = Tokenizer([
+            (u"ab+", AB),
+            (u"a+", A),
+            (u"b+", B)
+        ])
+        self.assertEqual(list(tokenizer(u"ababaab")), [
+            AB(u"abab", Span(0, 4)),
+            A(u"aa", Span(4, 6)),
+            B(u"b", Span(6, 7))
+        ])
+
+        string = u"ababaabbcaa"
+        with self.assertRaises(TokenizerError) as context:
+            list(tokenizer(string))
+        exception = context.exception
+        self.assertEqual(
+            exception.reason,
+            "string cannot be further consumed at position 8"
+        )
+        self.assertEqual(exception.position, 8)
+        self.assertEqual(string[exception.position], u"c")
