@@ -62,8 +62,8 @@ class NFA(MatcherBase):
 
     def match(self, string):
         states = [self.start]
-        last_successful_end = None
-        for i, character in enumerate(string):
+        last_successful_end = 0 if contains_final(states) else None
+        for i, character in enumerate(string, 1):
             states = flatten(state.transition(character) for state in states)
             if contains_final(states):
                 last_successful_end = i
@@ -109,14 +109,15 @@ class DFA(MatcherBase):
     def match(self, string):
         state = self.start
         last_successful_end = None
-        for i, character in enumerate(string):
+        for i, character in enumerate(string, 1):
             state = state.transition(character)
             if state is None:
                 break
             if state.is_final:
                 last_successful_end = i
         else:
-            last_successful_end = 0 if state.is_final else None
+            if last_successful_end is None and state.is_final:
+                last_successful_end = 0
         return last_successful_end
 
     def __repr__(self):
@@ -134,19 +135,19 @@ class DFATable(MatcherBase):
 
     def match(self, string):
         state = 0
-        success = None
-        for i, character in enumerate(string):
+        last_successful_end = None
+        for i, character in enumerate(string, 1):
             inputs = self.table[state]
             try:
                 state = inputs[character]
             except KeyError:
                 break
             if state in self.finals:
-                success = i
+                last_successful_end = i
         else:
-            if state in self.finals:
-                success = 0
-        return success
+            if last_successful_end is None and state in self.finals:
+                last_successful_end = 0
+        return last_successful_end
 
     def __repr__(self):
         return "%s(%r, %r)" % (
@@ -200,10 +201,19 @@ class NFAState(DFAState):
         states = []
         state = DFAState.transition(self, movement)
         if state is not None:
-            states.append(state)
+            states.extend(state._transitioned())
         for state in self.epsilon_transition():
             states.extend(state.transition(movement))
         return states
+
+    def _transitioned(self):
+        result = []
+        if self.is_final or self.movements:
+            result.append(self)
+        else:
+            for state in self.epsilon_moves:
+                result.extend(state._transitioned())
+        return result
 
     def epsilon_transition(self, excluding=None):
         states = set() if excluding is None else excluding
