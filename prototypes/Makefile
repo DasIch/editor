@@ -1,4 +1,9 @@
+test: regex rope
+
 regex:
 	python -m regex test
 
-.PHONY: regex
+rope:
+	python -m rope test
+
+.PHONY: regex rope

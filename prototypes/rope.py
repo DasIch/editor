@@ -14,10 +14,14 @@
     :copyright: 2012 by Daniel Neuhäuser
     :license: BSD, see LICENSE.rst
 """
+import sys
+import unittest
 from itertools import chain, izip
 
+from docopt import docopt
 
-def rope(obj, _strict=False):
+
+def rope(obj=u"", _strict=False):
     if _strict and (not hasattr(obj, "__rope__") or isinstance(obj, basestring)):
         raise TypeError()
     if hasattr(obj, "__rope__"):
@@ -54,6 +58,8 @@ class Rope(object):
     def __ne__(self, other):
         return not self == other
 
+    __hash__ = NotImplemented
+
     def join(self, iterable):
         result = u""
         for item in iterable:
@@ -81,6 +87,7 @@ class Concatenation(Rope):
         self.right = right
 
     def __getitem__(self, index):
+        assert index > 0
         if isinstance(index, int):
             if len(self) > index:
                 raise ValueError()
@@ -186,3 +193,53 @@ class String(Rope):
 
     def __nonzero__(self):
         return bool(self.data)
+
+
+class TestRope(unittest.TestCase):
+    def test_init(self):
+        self.assertIsInstance(rope(), String)
+
+
+class TestString(unittest.TestCase):
+    def test_getitem(self):
+        string = u"abc"
+        rstring = rope(u"abc")
+        for i, character in enumerate(string):
+            self.assertEqual(rstring[i], character)
+
+    def test_len(self):
+        self.assertEqual(len(rope(u"abc")), 3)
+
+    def test_iter(self):
+        self.assertEqual(list(iter(rope(u"abc"))), list(u"abc"))
+
+    def test_reversed(self):
+        self.assertEqual(list(reversed(rope(u"abc"))), list(u"cba"))
+
+    def test_unicode(self):
+        self.assertEqual(unicode(rope(u"abc")), u"abc")
+
+    def test_nonzero(self):
+        self.assertFalse(rope())
+        self.assertTrue(rope(u"abc"))
+
+
+def main(argv=sys.argv):
+    """
+    Usage:
+      rope test [<args>...]
+      rope -h | --help
+
+    Option:
+      -h --help  Show this.
+    """
+    arguments = docopt(main.__doc__, argv[1:], help=True)
+    if arguments["test"]:
+        unittest.main(
+            argv=argv[0:1] + arguments["<args>"],
+            buffer=True
+        )
+
+
+if __name__ == "__main__":
+    main()
