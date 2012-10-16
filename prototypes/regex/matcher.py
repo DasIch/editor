@@ -30,6 +30,15 @@ class MatcherBase(object):
                 return Find(string, Span(offset, offset + end))
             offset += 1
 
+    def find_all(self, string, offset=0):
+        """
+        Yields :class:`Find` objects.
+        """
+        find = self.find(string, offset)
+        while find is not None:
+            yield find
+            find = self.find(string, offset + find.span.end)
+
 
 class Find(object):
     def __init__(self, string, span):

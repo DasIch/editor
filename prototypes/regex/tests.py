@@ -7,6 +7,7 @@
     :license: BSD, see LICENSE.rst
 """
 from unittest import TestCase
+from itertools import izip
 from contextlib import contextmanager
 
 from regex.parser import (
@@ -249,7 +250,7 @@ class RegexTestWrapper(object):
             end = matcher.match(string)
             assert end == expected_end, end
 
-    def assertMatchesAll(self, matches):
+    def assertAllMatches(self, matches):
         for string, end in matches:
             self.assertMatches(string, end)
 
@@ -262,10 +263,19 @@ class RegexTestWrapper(object):
         for string in strings:
             self.assertNotMatches(string)
 
-    def assertFindEqual(self, string, expected_find):
+    def assertFindEqual(self, string, span):
         for matcher in self.matchers:
             find = matcher.find(string)
-            assert find == expected_find, find
+            assert find == Find(string, span), find
+
+    def assertAllFinds(self, finds):
+        for string, span in finds:
+            self.assertFindEqual(string, span)
+
+    def assertFindAllEqual(self, string, spans):
+        for matcher in self.matchers:
+            for find, span in izip(matcher.find_all(string), spans):
+                assert find == Find(string, span), find
 
 
 class TestMatcher(TestCase):
@@ -280,119 +290,207 @@ class TestMatcher(TestCase):
             regex.assertMatches(u"", 0)
             regex.assertNotMatches(u"a")
 
-            regex.assertFindEqual(u"", Find(u"", Span(0, 0)))
-            regex.assertFindEqual(u"a", Find(u"a", Span(1, 1)))
+            regex.assertAllFinds([
+                (u"", Span(0, 0)),
+                (u"a", Span(1, 1))
+            ])
 
     def test_any(self):
         with self.regex(u".") as regex:
             regex.assertMatches(u"a", 1)
 
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
+            regex.assertFindEqual(u"a", Span(0, 1))
+
+            regex.assertFindAllEqual(u"aa", [
+                Span(0, 1),
+                Span(1, 2)
+            ])
 
     def test_character(self):
         with self.regex(u"a") as regex:
             regex.assertMatches(u"a", 1)
             regex.assertMatches(u"aa", 1)
 
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
-            regex.assertFindEqual(u"ba", Find(u"ba", Span(1, 2)))
+            regex.assertAllFinds([
+                (u"a", Span(0, 1)),
+                (u"ba", Span(1, 2))
+            ])
+
+            regex.assertFindAllEqual(u"aa", [
+                Span(0, 1),
+                Span(1, 2)
+            ])
+            regex.assertFindAllEqual(u"aba", [
+                Span(0, 1),
+                Span(2, 3)
+            ])
 
     def test_concatenation(self):
         with self.regex(u"ab") as regex:
             regex.assertMatches(u"ab", 2)
             regex.assertMatches(u"abab", 2)
 
-            regex.assertFindEqual(u"ab", Find(u"ab", Span(0, 2)))
-            regex.assertFindEqual(u"cab", Find(u"cab", Span(1, 3)))
+            regex.assertAllFinds([
+                (u"ab", Span(0, 2)),
+                (U"cab", Span(1, 3))
+            ])
+
+            regex.assertFindAllEqual(u"abab", [
+                Span(0, 2),
+                Span(2, 4)
+            ])
+            regex.assertFindAllEqual(u"abcab", [
+                Span(0, 2),
+                Span(3, 5)
+            ])
 
     def test_union(self):
         with self.regex(u"a|b") as regex:
-            regex.assertMatchesAll([
-                (u"a", 1),
-                (u"b", 1),
-                (u"aa", 1),
-                (u"bb", 1)
-            ])
+            for string in [u"a", u"b", u"aa", u"bb"]:
+                regex.assertMatches(string, 1)
 
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
-            regex.assertFindEqual(u"b", Find(u"b", Span(0, 1)))
-            regex.assertFindEqual(u"ca", Find(u"ca", Span(1, 2)))
-            regex.assertFindEqual(u"cb", Find(u"cb", Span(1, 2)))
+            for string in [u"a", u"b"]:
+                regex.assertFindEqual(string, Span(0, 1))
+            for string in [u"ca", u"cb"]:
+                regex.assertFindEqual(string, Span(1, 2))
+
+            for string in [u"aa", u"bb", u"ab"]:
+                regex.assertFindAllEqual(string, [
+                    Span(0, 1),
+                    Span(1, 2)
+                ])
+            for string in [u"aca", u"bcb"]:
+                regex.assertFindAllEqual(string, [
+                    Span(0, 1),
+                    Span(2, 3)
+                ])
 
     def test_zero_or_more(self):
         with self.regex(u"a*") as regex:
-            regex.assertMatchesAll([(u"", 0), (u"a", 1), (u"aa", 2)])
+            regex.assertAllMatches([(u"", 0), (u"a", 1), (u"aa", 2)])
 
-            regex.assertFindEqual(u"", Find(u"", Span(0, 0)))
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
-            regex.assertFindEqual(u"aa", Find(u"aa", Span(0, 2)))
-            regex.assertFindEqual(u"b", Find(u"b", Span(1, 1)))
-            regex.assertFindEqual(u"ba", Find(u"ba", Span(1, 2)))
-            regex.assertFindEqual(u"baa", Find(u"baa", Span(1, 3)))
+            for string in [u"", u"a", u"aa"]:
+                regex.assertFindEqual(string, Span(0, len(string)))
+            for string in [u"b", u"ba", u"baa"]:
+                regex.assertFindEqual(string, Span(1, len(string)))
 
+            regex.assertFindAllEqual(u"aba", [
+                Span(0, 1),
+                Span(2, 3)
+            ])
+            regex.assertFindAllEqual(u"aabaa", [
+                Span(0, 2),
+                Span(3, 5)
+            ])
 
     def test_one_or_more(self):
         with self.regex(u"a+") as regex:
-            regex.assertMatchesAll([(u"a", 1), (u"aa", 2)])
+            regex.assertAllMatches([(u"a", 1), (u"aa", 2)])
 
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
-            regex.assertFindEqual(u"aa", Find(u"aa", Span(0, 2)))
-            regex.assertFindEqual(u"ba", Find(u"ba", Span(1, 2)))
-            regex.assertFindEqual(u"baa", Find(u"baa", Span(1, 3)))
+            for string in [u"a", u"aa"]:
+                regex.assertFindEqual(string, Span(0, len(string)))
+            for string in [u"ba", u"baa"]:
+                regex.assertFindEqual(string, Span(1, len(string)))
+
+            regex.assertFindAllEqual(u"aba", [
+                Span(0, 1),
+                Span(2, 3)
+            ])
+            regex.assertFindAllEqual(u"aabaa", [
+                Span(0, 2),
+                Span(3, 5)
+            ])
 
     def test_group(self):
         with self.regex(u"(ab)") as ab:
-            ab.assertMatches(u"ab", 2)
-            ab.assertMatches(u"abab", 2)
+            for string in [u"ab", u"abab", u"ababab"]:
+                ab.assertMatches(string, 2)
 
-            ab.assertFindEqual(u"ab", Find(u"ab", Span(0, 2)))
-            ab.assertFindEqual(u"cab", Find(u"cab", Span(1, 3)))
+            ab.assertAllFinds([
+                (u"ab", Span(0, 2)),
+                (u"cab", Span(1, 3))
+            ])
+
+            ab.assertFindAllEqual(u"abab", [
+                Span(0, 2),
+                Span(2, 4)
+            ])
+            ab.assertFindAllEqual(u"abcab", [
+                Span(0, 2),
+                Span(3, 5)
+            ])
 
         with self.regex(u"(ab)+") as abp:
-            abp.assertMatches(u"abab", 4)
+            abp.assertAllMatches([
+                (u"ab", 2),
+                (u"abab", 4),
+                (u"ababab", 6)
+            ])
 
-            abp.assertFindEqual(u"ab", Find(u"ab", Span(0, 2)))
-            abp.assertFindEqual(u"cab", Find(u"cab", Span(1, 3)))
-            abp.assertFindEqual(u"abab", Find(u"abab", Span(0, 4)))
-            abp.assertFindEqual(u"cabab", Find(u"cabab", Span(1, 5)))
+            for string in [u"ab", u"abab"]:
+                abp.assertFindEqual(string, Span(0, len(string)))
+            for string in [u"cab", u"cabab"]:
+                abp.assertFindEqual(string, Span(1, len(string)))
+
+            abp.assertFindAllEqual(u"abcab", [
+                Span(0, 2),
+                Span(3, 5)
+            ])
+            abp.assertFindAllEqual(u"ababcabab", [
+                Span(0, 4),
+                Span(5, 9)
+            ])
 
     def test_either(self):
         with self.regex(u"[ab]") as regex:
-            regex.assertMatchesAll([
-                (u"a", 1),
-                (u"b", 1),
-                (u"aa", 1),
-                (u"bb", 1)
-            ])
+            for string in [u"a", u"b", u"aa", u"bb", u"ab", u"ba"]:
+                regex.assertMatches(string, 1)
 
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
-            regex.assertFindEqual(u"ca", Find(u"ca", Span(1, 2)))
-            regex.assertFindEqual(u"b", Find(u"b", Span(0, 1)))
-            regex.assertFindEqual(u"cb", Find(u"cb", Span(1, 2)))
+            for string in [u"a", u"b"]:
+                regex.assertFindEqual(string, Span(0, 1))
+            for string in [u"ca", u"cb"]:
+                regex.assertFindEqual(string, Span(1, 2))
+
+            for string in [u"aa", u"bb", u"ab", u"ba"]:
+                regex.assertFindAllEqual(string, [
+                    Span(0, 1),
+                    Span(1, 2)
+                ])
+            for string in [u"aca", u"bcb", u"acb", u"bca"]:
+                regex.assertFindAllEqual(string, [
+                    Span(0, 1),
+                    Span(2, 3)
+                ])
 
     def test_neither(self):
         with self.regex(u"[^ab]") as regex:
             regex.assertMatches(u"c", 1)
             regex.assertNotMatchesAny([u"a", u"b"])
 
-            regex.assertFindEqual(u"c", Find(u"c", Span(0, 1)))
-            regex.assertFindEqual(u"ac", Find(u"ac", Span(1, 2)))
-            regex.assertFindEqual(u"bc", Find(u"bc", Span(1, 2)))
+            regex.assertAllFinds([
+                (u"c", Span(0, 1)),
+                (u"ac", Span(1, 2)),
+                (u"bc", Span(1, 2))
+            ])
+
+            for string in [u"cac", u"cbc"]:
+                regex.assertFindAllEqual(string, [
+                    Span(0, 1),
+                    Span(2, 3)
+                ])
 
     def test_range(self):
         with self.regex(u"[a-c]") as regex:
-            regex.assertMatchesAll([
-                (u"a", 1),
-                (u"aa", 1),
-                (u"b", 1),
-                (u"bb", 1),
-                (u"c", 1),
-                (u"cc", 1)
-            ])
+            for string in [u"a", u"aa", u"b", u"bb", u"c", u"cc"]:
+                regex.assertMatches(string, 1)
 
-            regex.assertFindEqual(u"a", Find(u"a", Span(0, 1)))
-            regex.assertFindEqual(u"b", Find(u"b", Span(0, 1)))
-            regex.assertFindEqual(u"c", Find(u"c", Span(0, 1)))
-            regex.assertFindEqual(u"da", Find(u"da", Span(1, 2)))
-            regex.assertFindEqual(u"da", Find(u"da", Span(1, 2)))
-            regex.assertFindEqual(u"da", Find(u"da", Span(1, 2)))
+            for string in [u"a", u"b", u"c"]:
+                regex.assertFindEqual(string, Span(0, 1))
+            for string in [u"da", u"db", u"dc"]:
+                regex.assertFindEqual(string, Span(1, 2))
+
+            for string in [u"ada", u"bdb", u"cdc"]:
+                regex.assertFindAllEqual(string, [
+                    Span(0, 1),
+                    Span(2, 3)
+                ])
