@@ -35,9 +35,12 @@ class MatcherBase(object):
         Yields :class:`Find` objects.
         """
         find = self.find(string, offset)
-        while find is not None:
+        if find is not None:
             yield find
-            find = self.find(string, offset + find.span.end)
+            find = self.find(string, find.span.end)
+            while find is not None and len(find.match) != 0:
+                yield find
+                find = self.find(string, find.span.end)
 
     def subn(self, string, substitution):
         if isinstance(substitution, unicode):
@@ -45,22 +48,13 @@ class MatcherBase(object):
         else:
             sub = substitution
         result = []
-        n = 0
-        match = self.find(string)
-        if match:
-            n += 1
-            result.append(string[:match.span.start])
+        n = previous_end = 0
+        for match in self.find_all(string):
+            result.append(string[previous_end:match.span.start])
             result.append(sub(match))
-            string = string[match.span.end:]
-            while string:
-                match = self.find(string)
-                if match is None or len(match.match) == 0:
-                    break
-                n += 1
-                result.append(string[:match.span.start])
-                result.append(sub(match))
-                string = string[match.span.end:]
-        result.append(string)
+            previous_end = match.span.end
+            n += 1
+        result.append(string[previous_end:])
         return u"".join(result), n
 
     def sub(self, string, substitution):

@@ -274,8 +274,14 @@ class RegexTestWrapper(object):
 
     def assertFindAllEqual(self, string, spans):
         for matcher in self.matchers:
-            for find, span in izip(matcher.find_all(string), spans):
+            finds = matcher.find_all(string)
+            for find, span in izip(finds, spans):
                 assert find == Find(string, span), find
+            try:
+                find = finds.next()
+                raise AssertionError("unexpected find: %r" % find)
+            except StopIteration:
+                pass
 
     def assertSub(self, string, sub, expected_result):
         for matcher in self.matchers:
