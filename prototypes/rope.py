@@ -82,6 +82,13 @@ class Rope(object):
 
 
 class Concatenation(Rope):
+    def __new__(cls, left, right):
+        if not left:
+            return right
+        if not right:
+            return left
+        return Rope.__new__(cls, left, right)
+
     def __init__(self, left, right):
         self.left = left
         self.right = right
@@ -89,14 +96,12 @@ class Concatenation(Rope):
     def __getitem__(self, index):
         assert index >= 0
         if isinstance(index, int):
-            if len(self) > index:
-                raise ValueError()
-            if len(self.left) < index:
+            if len(self.left) > index:
                 return self.left[index]
             index -= len(self.left)
-            if len(self.right) < index:
+            if len(self.right) > index:
                 return self.right[index]
-            raise IndexError()
+            raise IndexError(index)
         elif isinstance(index, slice):
             return rope(u"").join(
                 self[index] for index in index.indices(len(self))
@@ -254,6 +259,40 @@ class TestRepetition(unittest.TestCase):
 
     def test_nonzero(self):
         self.assertTrue(rope(u"abc") * 2)
+
+
+class TestConcatenation(unittest.TestCase):
+    def test_new_optimization(self):
+        abc = rope(u"abc")
+        self.assertIs(abc + rope(), abc)
+        self.assertIs(rope() + abc, abc)
+
+    def test_getitem(self):
+        string = u"abcdef"
+        rstring = rope(u"abc") + rope(u"def")
+        for i, character in enumerate(string):
+            self.assertEqual(rstring[i], character)
+
+    def test_len(self):
+        self.assertEqual(len(rope(u"abc") + rope(u"def")), 6)
+
+    def test_iter(self):
+        self.assertEqual(
+            list(iter(rope(u"abc") + rope(u"def"))),
+            list(u"abcdef")
+        )
+
+    def test_reversed(self):
+        self.assertEqual(
+            list(reversed(rope(u"abc") + rope(u"def"))),
+            list(reversed(u"abcdef"))
+        )
+
+    def test_unicode(self):
+        self.assertEqual(unicode(rope(u"abc") + rope(u"def")), u"abcdef")
+
+    def test_nonzero(self):
+        self.assertTrue(rope(u"abc") + rope(u"def"))
 
 
 def main(argv=sys.argv):
